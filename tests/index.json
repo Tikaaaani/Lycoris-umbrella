@@ -21,7 +21,7 @@
       "id": "English3",
       "name": "ИСИП Red Test",
       "description": "Английский 3 курс",
-      "questionCount": ,
+      "questionCount": 12,
       "estimatedTime": "30 мин",
       "difficulty": "Сложно",
       "fileName": "English3.json"
