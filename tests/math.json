@@ -1,0 +1,32 @@
+{
+  "title": "Математика - базовый уровень",
+  "questions": [
+    {
+      "question": "Сколько будет 2 + 2?",
+      "answers": [
+        {"text": "3", "isCorrect": false},
+        {"text": "4", "isCorrect": true},
+        {"text": "5", "isCorrect": false},
+        {"text": "6", "isCorrect": false}
+      ]
+    },
+    {
+      "question": "Чему равно π (пи) с точностью до двух знаков?",
+      "answers": [
+        {"text": "3.12", "isCorrect": false},
+        {"text": "3.14", "isCorrect": true},
+        {"text": "3.16", "isCorrect": false},
+        {"text": "3.18", "isCorrect": false}
+      ]
+    },
+    {
+      "question": "Что такое 5²?",
+      "answers": [
+        {"text": "10", "isCorrect": false},
+        {"text": "25", "isCorrect": true},
+        {"text": "15", "isCorrect": false},
+        {"text": "50", "isCorrect": false}
+      ]
+    }
+  ]
+}
