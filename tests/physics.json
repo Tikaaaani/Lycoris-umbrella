@@ -1,0 +1,23 @@
+{
+  "title": "Физика - механика",
+  "questions": [
+    {
+      "question": "Какой закон описывает F = ma?",
+      "answers": [
+        {"text": "Первый закон Ньютона", "isCorrect": false},
+        {"text": "Второй закон Ньютона", "isCorrect": true},
+        {"text": "Третий закон Ньютона", "isCorrect": false},
+        {"text": "Закон сохранения энергии", "isCorrect": false}
+      ]
+    },
+    {
+      "question": "Что измеряется в метрах в секунду (м/с)?",
+      "answers": [
+        {"text": "Ускорение", "isCorrect": false},
+        {"text": "Скорость", "isCorrect": true},
+        {"text": "Сила", "isCorrect": false},
+        {"text": "Масса", "isCorrect": false}
+      ]
+    }
+  ]
+}
