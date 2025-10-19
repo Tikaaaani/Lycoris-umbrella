@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "id": "math_basic",
+      "name": "Математика - базовый",
+      "description": "Основы математики: арифметика, алгебра, геометрия",
+      "questionCount": 3,
+      "estimatedTime": "5-10 мин",
+      "difficulty": "Начальный",
+      "fileName": "math_basic.json"
+    },
+    {
+      "id": "physics_mechanics",
+      "name": "Физика - механика",
+      "description": "Законы Ньютона, кинематика, динамика",
+      "questionCount": 2,
+      "estimatedTime": "5-10 мин",
+      "difficulty": "Средний",
+      "fileName": "physics_mechanics.json"
+    }
+  ]
+}
