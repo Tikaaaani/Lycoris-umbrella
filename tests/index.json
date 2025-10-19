@@ -17,6 +17,14 @@
       "estimatedTime": "5-10 мин",
       "difficulty": "Средний",
       "fileName": "physics_mechanics.json"
-    }
+    },{
+      "id": "English3",
+      "name": "ИСИП Red Test",
+      "description": "Английский 3 курс",
+      "questionCount": ,
+      "estimatedTime": "30 мин",
+      "difficulty": "Сложно",
+      "fileName": "English3.json"
+    }    
   ]
 }
