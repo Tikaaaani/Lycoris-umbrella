@@ -1,9 +1,9 @@
 {
-  "latest_version": "0.0.18",
-  "version_code": 18,
-  "update_url": "https://tikaaaani.github.io/Lycoris-umbrella/apk/Lycoris v0.0.18.apk",
+  "latest_version": "0.0.19",
+  "version_code": 19,
+  "update_url": "https://tikaaaani.github.io/Lycoris-umbrella/apk/Lycoris v0.0.19.apk",
   "release_notes": [
-    "Добавлена возможность менять никнейм"
+    "Добавлены уведомления"
   ],
   "mandatory": false
 }
