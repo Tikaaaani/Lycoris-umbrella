@@ -1,7 +1,7 @@
 {
   "latest_version": "0.0.17",
   "version_code": 17,
-  "update_url": "https://github.com/tikaaaani/Lycoris-umbrella/releases/download/v1.1.0/app-release.apk",
+  "update_url": "https://github.com/Tikaaaani/Lycoris-umbrella/raw/main/app-release.apk",
   "release_notes": [
     "Добавлена возможность менять никнейм"
   ],
