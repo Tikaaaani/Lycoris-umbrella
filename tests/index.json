@@ -1,29 +1,12 @@
 {
   "tests": [
     {
-      "id": "math_basic",
-      "name": "Математика - базовый",
-      "description": "Основы математики: арифметика, алгебра, геометрия",
-      "questionCount": 3,
-      "estimatedTime": "5-10 мин",
-      "difficulty": "Начальный",
-      "fileName": "math_basic.json"
-    },
-    {
-      "id": "physics_mechanics",
-      "name": "Физика - механика",
-      "description": "Законы Ньютона, кинематика, динамика",
-      "questionCount": 2,
-      "estimatedTime": "5-10 мин",
-      "difficulty": "Средний",
-      "fileName": "physics_mechanics.json"
-    },{
       "id": "English3",
-      "name": "ИСИП Red Test",
-      "description": "Английский 3 курс",
-      "questionCount": 12,
-      "estimatedTime": "30 мин",
-      "difficulty": "Сложно",
+      "name": "Английский 3 курс",
+      "description": "Английский язык - тест для 2-3 курса",
+      "questionCount": 240,
+      "estimatedTime": "60-90 мин",
+      "difficulty": "Неприятный",
       "fileName": "English3.json"
     }    
   ]
