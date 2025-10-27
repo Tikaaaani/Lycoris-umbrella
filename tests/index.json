@@ -19,14 +19,14 @@
       "fileName": "English 4.json"
     },
     {
-      "id": "МДК 02.01",
+      "id": "02.01",
       "name": "МДК 02.01",
       "description": "Технология разработки ПО",
       "questionCount": 104,
       "estimatedTime": "30 мин",
       "difficulty": "ХЗ не смотрел",
-      "fileName": "МДК 02.01.json",
-      "encryptedFileName": "МДК 02.01.lyc"
+      "fileName": "02.01.json",
+      "encryptedFileName": "02.01.lyc"
     }
   ]
 }
