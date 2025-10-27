@@ -17,6 +17,16 @@
       "estimatedTime": "90 мин",
       "difficulty": "Ужас",
       "fileName": "English 4.json"
+    },
+    {
+      "id": "Экономика",
+      "name": "Экономика",
+      "description": "Экономика есть экономика",
+      "questionCount": 111,
+      "estimatedTime": "9 мин",
+      "difficulty": "брух",
+      "fileName": "Экономика.json"
+      "encryptedFileName": "Экономика.lyc"
     }
   ]
 }
