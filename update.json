@@ -1,9 +1,9 @@
 {
-  "latest_version": "0.0.20",
-  "version_code": 20,
-  "update_url": "https://tikaaaani.github.io/Lycoris-umbrella/apk/Lycoris v0.0.19.apk",
+  "latest_version": "0.0.21",
+  "version_code": 21,
+  "update_url": "https://tikaaaani.github.io/Lycoris-umbrella/apk/Lycoris v0.0.21.apk",
   "release_notes": [
-    "Добавлены уведомления"
+    "Скачивайте тесты для работы без инета"
   ],
   "mandatory": false
 }
