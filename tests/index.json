@@ -19,14 +19,14 @@
       "fileName": "English 4.json"
     },
     {
-      "id": "Экономика",
-      "name": "Экономика",
-      "description": "Экономика есть экономика",
-      "questionCount": 111,
-      "estimatedTime": "9 мин",
-      "difficulty": "брух",
-      "fileName": "Экономика.json",
-      "encryptedFileName": "Экономика.lyc"
+      "id": "МДК 02.01",
+      "name": "МДК 02.01",
+      "description": "Технология разработки ПО",
+      "questionCount": 104,
+      "estimatedTime": "30 мин",
+      "difficulty": "ХЗ не смотрел",
+      "fileName": "МДК 02.01.json",
+      "encryptedFileName": "МДК 02.01.lyc"
     }
   ]
 }
