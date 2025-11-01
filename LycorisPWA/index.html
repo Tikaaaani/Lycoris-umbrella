@@ -11,31 +11,40 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#922B3E">
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
 </head>
+
 <body>
     <div id="app">
         <!-- Экран авторизации -->
-        <div id="auth-screen" class="screen active">
-            <div class="container">
-                <h1>🎯 Lycoris</h1>
-                <p>Тесты и обучение</p>
-                
-                <div class="auth-form">
-                    <input type="email" id="email" placeholder="Email" class="input">
-                    <input type="password" id="password" placeholder="Пароль" class="input">
-                    <button onclick="login()" class="btn btn-primary">Войти</button>
-                    <button onclick="toggleMode()" class="btn btn-secondary">Регистрация</button>
-                </div>
-            </div>
+    <div id="auth-screen" class="screen active">
+        <div class="container">
+            <h1>🎯 Lycoris</h1>
+            <p>Тесты и обучение</p>
+        
+        <div class="auth-form">
+            <input type="email" id="email" placeholder="Email" class="input">
+            <input type="password" id="password" placeholder="Пароль" class="input">
+            <button onclick="handleAuth()" class="btn btn-primary" id="auth-button">Войти</button>
+            <button onclick="toggleAuthMode()" class="btn btn-secondary" id="toggle-auth-button">Регистрация</button>
         </div>
+        
+            <div id="auth-message" style="margin-top: 15px;"></div>
+        </div>
+    </div>
         
         <!-- Главный экран (скрыт сначала) -->
         <div id="main-screen" class="screen">
             <div class="container">
                 <h1>Главная</h1>
+                <p id="user-email" style="color: #888; margin-bottom: 20px;"></p>
                 <div class="menu">
                     <button onclick="showTests()" class="btn btn-primary">Пройти тест</button>
                     <button onclick="showStats()" class="btn btn-primary">Статистика</button>
+                    <button onclick="logout()" class="btn btn-secondary">Выйти</button>
                 </div>
             </div>
         </div>
@@ -70,27 +79,134 @@
     </div>
 
     <script>
+        // ===== FIREBASE CONFIG =====
+        const firebaseConfig = {
+            apiKey: "AIzaSyCrixbCDYIDnQJy9i-5OqfRBzl-yv6VPCo",
+            authDomain: "lotos-vbinc.firebaseapp.com",
+            projectId: "lotos-vbinc",
+            storageBucket: "lotos-vbinc.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID", // Замени на реальный
+            appId: "YOUR_APP_ID" // Замени на реальный
+        };
+
+        // Инициализация Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+
         // ===== БАЗОВАЯ НАВИГАЦИЯ =====
         function showScreen(screenId) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
             document.getElementById(screenId).classList.add('active');
         }
         
-        function login() {
-            showScreen('main-screen');
+        // ===== АВТОРИЗАЦИЯ FIREBASE =====
+        let isLoginMode = true;
+
+        function toggleAuthMode() {
+            isLoginMode = !isLoginMode;
+            const authButton = document.getElementById('auth-button');
+            const toggleButton = document.getElementById('toggle-auth-button');
+            const messageDiv = document.getElementById('auth-message');
+            
+            if (isLoginMode) {
+                authButton.textContent = 'Войти';
+                toggleButton.textContent = 'Регистрация';
+                messageDiv.innerHTML = '';
+            } else {
+                authButton.textContent = 'Зарегистрироваться';
+                toggleButton.textContent = 'Уже есть аккаунт';
+                messageDiv.innerHTML = '<p style="color: #888; font-size: 14px;">Минимальная длина пароля - 6 символов</p>';
+            }
         }
-        
-        function toggleMode() {
-            alert('Регистрация будет позже');
+
+        async function handleAuth() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const messageDiv = document.getElementById('auth-message');
+            const authButton = document.getElementById('auth-button');
+            
+            if (!email || !password) {
+                showAuthMessage('Заполните все поля', 'error');
+                return;
+            }
+            
+            if (password.length < 6 && !isLoginMode) {
+                showAuthMessage('Пароль должен быть не менее 6 символов', 'error');
+                return;
+            }
+            
+            // Блокируем кнопку
+            authButton.disabled = true;
+            authButton.textContent = isLoginMode ? 'Вход...' : 'Регистрация...';
+            
+            try {
+                if (isLoginMode) {
+                    await auth.signInWithEmailAndPassword(email, password);
+                } else {
+                    await auth.createUserWithEmailAndPassword(email, password);
+                }
+                // Успешная авторизация - автоматически перейдем на главный экран
+            } catch (error) {
+                let errorMessage = 'Ошибка авторизации';
+                switch (error.code) {
+                    case 'auth/user-not-found':
+                        errorMessage = 'Пользователь не найден';
+                        break;
+                    case 'auth/wrong-password':
+                        errorMessage = 'Неверный пароль';
+                        break;
+                    case 'auth/email-already-in-use':
+                        errorMessage = 'Email уже используется';
+                        break;
+                    case 'auth/weak-password':
+                        errorMessage = 'Пароль слишком простой';
+                        break;
+                    case 'auth/invalid-email':
+                        errorMessage = 'Неверный формат email';
+                        break;
+                }
+                showAuthMessage(errorMessage, 'error');
+            } finally {
+                authButton.disabled = false;
+                authButton.textContent = isLoginMode ? 'Войти' : 'Зарегистрироваться';
+            }
         }
-        
+
+        function showAuthMessage(message, type) {
+            const messageDiv = document.getElementById('auth-message');
+            const color = type === 'error' ? '#ff4444' : '#44ff44';
+            messageDiv.innerHTML = `<p style="color: ${color}; text-align: center;">${message}</p>`;
+        }
+
+        // ===== ПРОВЕРКА АВТОРИЗАЦИИ ПРИ ЗАГРУЗКЕ =====
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                // Пользователь авторизован
+                showScreen('main-screen');
+                document.getElementById('user-email').textContent = user.email;
+                console.log('Пользователь авторизован:', user.email);
+            } else {
+                // Пользователь не авторизован
+                showScreen('auth-screen');
+                document.getElementById('user-email').textContent = '';
+            }
+        });
+
+        // ===== ВЫХОД ИЗ СИСТЕМЫ =====
+        function logout() {
+            auth.signOut();
+        }
+
         function showTests() {
             showScreen('tests-screen');
             loadTestsList();
         }
         
         function showStats() {
-            alert('Статистика будет позже');
+            const user = auth.currentUser;
+            if (user) {
+                alert(`Статистика для: ${user.email}\n\nФункция статистики в разработке`);
+            }
         }
 
         // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ ТЕСТОВ =====
@@ -171,40 +287,40 @@
                     </div>
                 `;
 
-            // ВОССТАНАВЛИВАЕМ ВИДИМОСТЬ КНОПОК УПРАВЛЕНИЯ
-            const testControls = document.querySelector('.test-controls');
-            if   (testControls) {
-                testControls.style.display = 'flex';
-            }
+                // ВОССТАНАВЛИВАЕМ ВИДИМОСТЬ КНОПОК УПРАВЛЕНИЯ
+                const testControls = document.querySelector('.test-controls');
+                if (testControls) {
+                    testControls.style.display = 'flex';
+                }
 
-            const testData = await loadRealTestData(testId);
-        
-            if (!testData || !testData.questions || testData.questions.length === 0) {
-                throw new Error('Тест пустой или поврежден');
-            }
+                const testData = await loadRealTestData(testId);
+            
+                if (!testData || !testData.questions || testData.questions.length === 0) {
+                    throw new Error('Тест пустой или поврежден');
+                }
 
-            currentTest = testData;
-            currentQuestionIndex = 0;
-            userAnswers = [];
-            checkedQuestions = new Set();
-            testStartTime = Date.now();
-        
-            showScreen('test-session-screen');
-            displayCurrentQuestion();
-        
-        } catch (error) {
-            console.error('Ошибка запуска теста:', error);
-            testsContainer.innerHTML = `
-                <div class="error-message">
-                    <p>❌ Не удалось загрузить тест</p>
-                    <p style="font-size: 14px; margin-top: 8px;">${error.message}</p>
-                    <button onclick="loadTestsList()" class="btn btn-primary" style="margin-top: 15px;">
-                        Вернуться к списку
-                    </button>
-                </div>
-            `;
+                currentTest = testData;
+                currentQuestionIndex = 0;
+                userAnswers = [];
+                checkedQuestions = new Set();
+                testStartTime = Date.now();
+            
+                showScreen('test-session-screen');
+                displayCurrentQuestion();
+            
+            } catch (error) {
+                console.error('Ошибка запуска теста:', error);
+                testsContainer.innerHTML = `
+                    <div class="error-message">
+                        <p>❌ Не удалось загрузить тест</p>
+                        <p style="font-size: 14px; margin-top: 8px;">${error.message}</p>
+                        <button onclick="loadTestsList()" class="btn btn-primary" style="margin-top: 15px;">
+                            Вернуться к списку
+                        </button>
+                    </div>
+                `;
+            }
         }
-    }
 
         // ===== РЕАЛЬНАЯ ЗАГРУЗКА ТЕСТОВ =====
         async function loadRealTestData(testId) {
@@ -397,19 +513,19 @@
         }
 
         // ===== ПРОВЕРКА ОТВЕТА ТОЛЬКО С ЦВЕТОВОЙ ПОДСВЕТКОЙ =====
-function checkAnswer() {
-    const currentAnswer = userAnswers[currentQuestionIndex];
-    
-    if (currentAnswer === undefined) {
-        return; // Просто ничего не делаем, если ответ не выбран
-    }
-    
-    // Помечаем вопрос как проверенный
-    checkedQuestions.add(currentQuestionIndex);
-    
-    // Перерисовываем вопрос с цветовой подсветкой
-    displayCurrentQuestion();
-}
+        function checkAnswer() {
+            const currentAnswer = userAnswers[currentQuestionIndex];
+            
+            if (currentAnswer === undefined) {
+                return; // Просто ничего не делаем, если ответ не выбран
+            }
+            
+            // Помечаем вопрос как проверенный
+            checkedQuestions.add(currentQuestionIndex);
+            
+            // Перерисовываем вопрос с цветовой подсветкой
+            displayCurrentQuestion();
+        }
 
         // ===== НАВИГАЦИЯ ПО ВОПРОСАМ =====
         function nextQuestion() {
