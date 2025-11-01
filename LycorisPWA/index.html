@@ -84,6 +84,13 @@
             <div class="container">
                 <h1>📊 Статистика</h1>
                 
+                <!-- Поле для ввода никнейма -->
+                <div class="nickname-section" style="margin-bottom: 20px;">
+                    <input type="text" id="user-nickname" placeholder="Введите ваш никнейм" class="input" style="width: 100%;">
+                    <button onclick="saveNickname()" class="btn btn-primary" style="margin-top: 10px; width: 100%;">Сохранить никнейм</button>
+                    <div id="nickname-message" style="margin-top: 10px; text-align: center;"></div>
+                </div>
+                
                 <!-- Вкладки -->
                 <div class="tabs">
                     <button class="tab-button active" onclick="switchTab('general-stats')">Общая</button>
@@ -152,13 +159,94 @@
         let checkedQuestions = new Set();
         let currentWeeklyFilter = 'correct';
         let currentGlobalFilter = 'correct';
+        let userNickname = '';
 
         // ===== БАЗОВАЯ НАВИГАЦИЯ =====
         function showScreen(screenId) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
             document.getElementById(screenId).classList.add('active');
+            
+            // Скрываем кнопки управления тестом на экране результатов
+            if (screenId === 'test-session-screen') {
+                const testControls = document.querySelector('.test-controls');
+                if (testControls) {
+                    testControls.style.display = 'flex';
+                }
+            } else {
+                const testControls = document.querySelector('.test-controls');
+                if (testControls) {
+                    testControls.style.display = 'none';
+                }
+            }
+            
+            // Загружаем никнейм при показе экрана статистики
+            if (screenId === 'stats-screen') {
+                loadUserNickname();
+            }
         }
         
+        // ===== СИСТЕМА НИКНЕЙМОВ =====
+        function loadUserNickname() {
+            const user = auth.currentUser;
+            if (!user) return;
+
+            database.ref('users').child(user.uid).child('nickname').once('value')
+                .then((snapshot) => {
+                    const nickname = snapshot.val();
+                    const nicknameInput = document.getElementById('user-nickname');
+                    if (nicknameInput) {
+                        nicknameInput.value = nickname || '';
+                        userNickname = nickname || '';
+                    }
+                })
+                .catch((error) => {
+                    console.error('Ошибка загрузки никнейма:', error);
+                });
+        }
+
+        function saveNickname() {
+            const user = auth.currentUser;
+            if (!user) return;
+
+            const nicknameInput = document.getElementById('user-nickname');
+            const nickname = nicknameInput.value.trim();
+            const messageDiv = document.getElementById('nickname-message');
+
+            if (!nickname) {
+                messageDiv.innerHTML = '<p style="color: #ff4444;">Введите никнейм</p>';
+                return;
+            }
+
+            if (nickname.length < 2 || nickname.length > 20) {
+                messageDiv.innerHTML = '<p style="color: #ff4444;">Никнейм должен быть от 2 до 20 символов</p>';
+                return;
+            }
+
+            database.ref('users').child(user.uid).child('nickname').set(nickname)
+                .then(() => {
+                    userNickname = nickname;
+                    messageDiv.innerHTML = '<p style="color: #44ff44;">Никнейм сохранен!</p>';
+                    setTimeout(() => {
+                        messageDiv.innerHTML = '';
+                    }, 2000);
+                })
+                .catch((error) => {
+                    console.error('Ошибка сохранения никнейма:', error);
+                    messageDiv.innerHTML = '<p style="color: #ff4444;">Ошибка сохранения</p>';
+                });
+        }
+
+        function getUserDisplayName(userData) {
+            // Сначала пробуем получить никнейм, потом имя из email, потом "Аноним"
+            if (userData.nickname) {
+                return userData.nickname;
+            }
+            if (userData.email) {
+                return userData.email.split('@')[0];
+            }
+            return 'Аноним';
+        }
+
         // ===== АВТОРИЗАЦИЯ FIREBASE =====
         let isLoginMode = true;
 
@@ -244,6 +332,7 @@
                 showScreen('main-screen');
                 document.getElementById('user-email').textContent = user.email;
                 console.log('Пользователь авторизован:', user.email);
+                loadUserNickname();
             } else {
                 // Пользователь не авторизован
                 showScreen('auth-screen');
@@ -843,9 +932,14 @@
                 </div>
             `;
             
-            // Очищаем прогресс, но НЕ скрываем кнопки управления
+            // Очищаем прогресс и СКРЫВАЕМ кнопки управления
             document.getElementById('test-progress').innerHTML = '';
             document.getElementById('answer-feedback').innerHTML = '';
+            
+            const testControls = document.querySelector('.test-controls');
+            if (testControls) {
+                testControls.style.display = 'none';
+            }
         }
 
         function getResultPhrase(percentage) {
@@ -1068,8 +1162,7 @@
                         }
 
                         const weeklyStats = userData.weeklyStats || {};
-                        const email = userData.email || '';
-                        const userName = email.split('@')[0] || 'Аноним';
+                        const userName = getUserDisplayName(userData);
 
                         // Считаем очки в зависимости от фильтра
                         let score = 0;
@@ -1211,8 +1304,7 @@
                         }
 
                         const stats = userData.stats || {};
-                        const email = userData.email || '';
-                        const userName = email.split('@')[0] || 'Аноним';
+                        const userName = getUserDisplayName(userData);
 
                         // Считаем очки в зависимости от фильтра
                         let score = 0;
