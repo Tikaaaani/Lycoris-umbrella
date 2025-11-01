@@ -100,6 +100,11 @@
                 
                 <!-- Недельная статистика -->
                 <div id="weekly-stats" class="tab-content">
+                    <div class="stats-filters">
+                        <button class="filter-button active" onclick="changeWeeklyFilter('correct')">✅ Правильные</button>
+                        <button class="filter-button" onclick="changeWeeklyFilter('completed')">📚 Тесты</button>
+                        <button class="filter-button" onclick="changeWeeklyFilter('time')">⏱️ Время</button>
+                    </div>
                     <div id="weekly-stats-content">
                         <!-- Недельная статистика будет здесь -->
                     </div>
@@ -107,6 +112,12 @@
                 
                 <!-- Глобальная статистика -->
                 <div id="global-stats" class="tab-content">
+                    <div class="stats-filters">
+                        <button class="filter-button active" onclick="changeGlobalFilter('correct')">✅ Правильные</button>
+                        <button class="filter-button" onclick="changeGlobalFilter('completed')">📚 Тесты</button>
+                        <button class="filter-button" onclick="changeGlobalFilter('time')">⏱️ Время</button>
+                        <button class="filter-button" onclick="changeGlobalFilter('days')">📅 Дни</button>
+                    </div>
                     <div id="global-stats-content">
                         <!-- Глобальная статистика будет здесь -->
                     </div>
@@ -124,14 +135,23 @@
             authDomain: "lotos-vbinc.firebaseapp.com",
             projectId: "lotos-vbinc",
             storageBucket: "lotos-vbinc.appspot.com",
-            messagingSenderId: "000000000000", // Замени на реальный
-            appId: "your_app_id" // Замени на реальный
+            messagingSenderId: "000000000000",
+            appId: "your_app_id"
         };
 
         // Инициализация Firebase
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const database = firebase.database();
+
+        // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
+        let currentTest = null;
+        let currentQuestionIndex = 0;
+        let userAnswers = [];
+        let testStartTime = null;
+        let checkedQuestions = new Set();
+        let currentWeeklyFilter = 'correct';
+        let currentGlobalFilter = 'correct';
 
         // ===== БАЗОВАЯ НАВИГАЦИЯ =====
         function showScreen(screenId) {
@@ -235,13 +255,6 @@
         function logout() {
             auth.signOut();
         }
-
-        // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ ТЕСТОВ =====
-        let currentTest = null;
-        let currentQuestionIndex = 0;
-        let userAnswers = [];
-        let testStartTime = null;
-        let checkedQuestions = new Set();
 
         // ===== ФУНКЦИИ ТЕСТОВ =====
         function showTests() {
@@ -705,8 +718,53 @@
                     };
 
                     userRef.child('stats').set(updatedStats);
+
+                    // Обновление недельной статистики
+                    updateWeeklyStats(userRef, correctAnswers, totalQuestions - correctAnswers, timeSpentSeconds);
                 });
             });
+        }
+
+        function updateWeeklyStats(userRef, correctAnswers, wrongAnswers, timeSpentSeconds) {
+            const weekStart = getWeekStartTimestamp();
+            
+            userRef.child('weeklyStats').once('value').then((snapshot) => {
+                const currentWeekly = snapshot.val() || {
+                    weekStart: weekStart,
+                    correctAnswers: 0,
+                    wrongAnswers: 0,
+                    completedTests: 0,
+                    totalTime: 0
+                };
+
+                // Если началась новая неделя, сбрасываем статистику
+                if (currentWeekly.weekStart !== weekStart) {
+                    currentWeekly.weekStart = weekStart;
+                    currentWeekly.correctAnswers = 0;
+                    currentWeekly.wrongAnswers = 0;
+                    currentWeekly.completedTests = 0;
+                    currentWeekly.totalTime = 0;
+                }
+
+                const updatedWeekly = {
+                    weekStart: weekStart,
+                    correctAnswers: currentWeekly.correctAnswers + correctAnswers,
+                    wrongAnswers: currentWeekly.wrongAnswers + wrongAnswers,
+                    completedTests: currentWeekly.completedTests + 1,
+                    totalTime: currentWeekly.totalTime + timeSpentSeconds
+                };
+
+                userRef.child('weeklyStats').set(updatedWeekly);
+            });
+        }
+
+        function getWeekStartTimestamp() {
+            const now = new Date();
+            const day = now.getDay();
+            const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+            const weekStart = new Date(now.setDate(diff));
+            weekStart.setHours(0, 0, 0, 0);
+            return weekStart.getTime();
         }
 
         function formatTime(totalSeconds) {
@@ -865,6 +923,24 @@
             }
         }
 
+        function changeWeeklyFilter(filter) {
+            currentWeeklyFilter = filter;
+            document.querySelectorAll('#weekly-stats .filter-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            loadWeeklyStats();
+        }
+
+        function changeGlobalFilter(filter) {
+            currentGlobalFilter = filter;
+            document.querySelectorAll('#global-stats .filter-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            loadGlobalStats();
+        }
+
         function loadGeneralStats() {
             const user = auth.currentUser;
             if (!user) return;
@@ -953,13 +1029,313 @@
         }
 
         function loadWeeklyStats() {
+            const user = auth.currentUser;
+            if (!user) return;
+
             const statsContainer = document.getElementById('weekly-stats-content');
-            statsContainer.innerHTML = '<p>Недельная статистика в разработке...</p>';
+            statsContainer.innerHTML = '<div class="loading-spinner"></div><p>Загружаем недельную статистику...</p>';
+
+            // Загружаем недельную статистику текущего пользователя
+            database.ref('users').child(user.uid).child('weeklyStats').once('value')
+                .then((snapshot) => {
+                    const weeklyStats = snapshot.val();
+                    // Загружаем рейтинг всех пользователей
+                    loadAllUsersRating(weeklyStats);
+                })
+                .catch((error) => {
+                    statsContainer.innerHTML = '<p class="error-message">Ошибка загрузки недельной статистики</p>';
+                });
+        }
+
+        function loadAllUsersRating(currentUserWeeklyStats) {
+            const user = auth.currentUser;
+            if (!user) return;
+
+            database.ref('users').once('value')
+                .then((snapshot) => {
+                    const usersRating = [];
+                    const currentTime = Date.now();
+                    const thirtyDaysInMillis = 30 * 24 * 60 * 60 * 1000;
+
+                    snapshot.forEach((userSnapshot) => {
+                        const userId = userSnapshot.key;
+                        const userData = userSnapshot.val();
+                        
+                        // Проверяем активность пользователя (последние 30 дней)
+                        const lastActivity = userData.stats?.timestamp || 0;
+                        if (currentTime - lastActivity > thirtyDaysInMillis) {
+                            return; // Пропускаем неактивных пользователей
+                        }
+
+                        const weeklyStats = userData.weeklyStats || {};
+                        const email = userData.email || '';
+                        const userName = email.split('@')[0] || 'Аноним';
+
+                        // Считаем очки в зависимости от фильтра
+                        let score = 0;
+                        let displayValue = '';
+                        
+                        switch (currentWeeklyFilter) {
+                            case 'correct':
+                                score = weeklyStats.correctAnswers || 0;
+                                displayValue = `✅ ${score}`;
+                                break;
+                            case 'completed':
+                                score = weeklyStats.completedTests || 0;
+                                displayValue = `📚 ${score}`;
+                                break;
+                            case 'time':
+                                score = weeklyStats.totalTime || 0;
+                                displayValue = `⏱️ ${formatTimeShort(score)}`;
+                                break;
+                            default:
+                                score = weeklyStats.correctAnswers || 0;
+                                displayValue = `✅ ${score}`;
+                        }
+
+                        if (score > 0) { // Только пользователи с активностью
+                            usersRating.push({
+                                userId: userId,
+                                userName: userName,
+                                score: score,
+                                displayValue: displayValue,
+                                isCurrentUser: userId === user.uid
+                            });
+                        }
+                    });
+
+                    // Сортируем по убыванию очков
+                    usersRating.sort((a, b) => b.score - a.score);
+                    displayWeeklyStats(currentUserWeeklyStats, usersRating);
+                })
+                .catch((error) => {
+                    console.error('Ошибка загрузки рейтинга:', error);
+                    document.getElementById('weekly-stats-content').innerHTML = '<p class="error-message">Ошибка загрузки рейтинга</p>';
+                });
+        }
+
+        function displayWeeklyStats(weeklyStats, usersRating) {
+            const statsContainer = document.getElementById('weekly-stats-content');
+            
+            let statsContent = '';
+            
+            // Статистика текущего пользователя
+            if (weeklyStats) {
+                statsContent += `
+                    <div class="result-section">
+                        <div class="result-label">📊 Ваша статистика за неделю</div>
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <div class="stat-emoji">✅</div>
+                                <div class="stat-value" style="color: #00C853;">${weeklyStats.correctAnswers || 0}</div>
+                                <div class="stat-label">Правильные</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-emoji">❌</div>
+                                <div class="stat-value" style="color: #D50000;">${weeklyStats.wrongAnswers || 0}</div>
+                                <div class="stat-label">Неправильные</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-emoji">📚</div>
+                                <div class="stat-value" style="color: #922B3E;">${weeklyStats.completedTests || 0}</div>
+                                <div class="stat-label">Тесты</div>
+                            </div>
+                        </div>
+                        <div class="stat-detail" style="margin-top: 15px; text-align: center;">
+                            <span>⏱️ Общее время:</span>
+                            <span class="stat-detail-value">${formatTimeShort(weeklyStats.totalTime || 0)}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Рейтинг пользователей
+            if (usersRating.length > 0) {
+                const currentUserRank = usersRating.findIndex(user => user.isCurrentUser) + 1;
+                const top10 = usersRating.slice(0, 10);
+                
+                statsContent += `
+                    <div class="result-section">
+                        <div class="result-label">
+                            ${getWeeklyFilterTitle()} 
+                            ${currentUserRank > 0 ? `- Ваше место: ${currentUserRank}` : ''}
+                        </div>
+                        <div class="rating-list">
+                            ${top10.map((user, index) => `
+                                <div class="rating-item ${user.isCurrentUser ? 'current-user' : ''}">
+                                    <div class="rating-position">
+                                        ${getPositionEmoji(index + 1)} ${index + 1}
+                                    </div>
+                                    <div class="rating-name">${user.userName}</div>
+                                    <div class="rating-value">${user.displayValue}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            } else {
+                statsContent += `
+                    <div class="result-section">
+                        <div class="result-label">🏆 Рейтинг недели</div>
+                        <p style="text-align: center; color: #888; padding: 20px;">
+                            Пока нет активных пользователей за эту неделю
+                        </p>
+                    </div>
+                `;
+            }
+
+            statsContainer.innerHTML = statsContent;
         }
 
         function loadGlobalStats() {
+            const user = auth.currentUser;
+            if (!user) return;
+
             const statsContainer = document.getElementById('global-stats-content');
-            statsContainer.innerHTML = '<p>Глобальная статистика в разработке...</p>';
+            statsContainer.innerHTML = '<div class="loading-spinner"></div><p>Загружаем глобальную статистику...</p>';
+
+            database.ref('users').once('value')
+                .then((snapshot) => {
+                    const usersRating = [];
+                    const currentTime = Date.now();
+                    const thirtyDaysInMillis = 30 * 24 * 60 * 60 * 1000;
+
+                    snapshot.forEach((userSnapshot) => {
+                        const userId = userSnapshot.key;
+                        const userData = userSnapshot.val();
+                        
+                        // Проверяем активность пользователя
+                        const lastActivity = userData.stats?.timestamp || 0;
+                        if (currentTime - lastActivity > thirtyDaysInMillis) {
+                            return; // Пропускаем неактивных
+                        }
+
+                        const stats = userData.stats || {};
+                        const email = userData.email || '';
+                        const userName = email.split('@')[0] || 'Аноним';
+
+                        // Считаем очки в зависимости от фильтра
+                        let score = 0;
+                        let displayValue = '';
+                        
+                        switch (currentGlobalFilter) {
+                            case 'correct':
+                                score = stats.totalCorrect || 0;
+                                displayValue = `✅ ${score}`;
+                                break;
+                            case 'completed':
+                                score = stats.completedTests || 0;
+                                displayValue = `📚 ${score}`;
+                                break;
+                            case 'time':
+                                score = stats.totalTimeSeconds || 0;
+                                displayValue = `⏱️ ${formatTimeShort(score)}`;
+                                break;
+                            case 'days':
+                                score = stats.activeDays || 0;
+                                displayValue = `📅 ${score}`;
+                                break;
+                            default:
+                                score = stats.totalCorrect || 0;
+                                displayValue = `✅ ${score}`;
+                        }
+
+                        if (score > 0) { // Только пользователи с активностью
+                            usersRating.push({
+                                userId: userId,
+                                userName: userName,
+                                score: score,
+                                displayValue: displayValue,
+                                isCurrentUser: userId === user.uid
+                            });
+                        }
+                    });
+
+                    // Сортируем по убыванию очков
+                    usersRating.sort((a, b) => b.score - a.score);
+                    displayGlobalStats(usersRating);
+                })
+                .catch((error) => {
+                    console.error('Ошибка загрузки глобальной статистики:', error);
+                    document.getElementById('global-stats-content').innerHTML = '<p class="error-message">Ошибка загрузки глобальной статистики</p>';
+                });
+        }
+
+        function displayGlobalStats(usersRating) {
+            const statsContainer = document.getElementById('global-stats-content');
+            
+            let statsContent = '';
+            
+            if (usersRating.length > 0) {
+                const currentUserRank = usersRating.findIndex(user => user.isCurrentUser) + 1;
+                const top20 = usersRating.slice(0, 20);
+                
+                statsContent += `
+                    <div class="result-section">
+                        <div class="result-label">
+                            ${getGlobalFilterTitle()} 
+                            ${currentUserRank > 0 ? `- Ваше место: ${currentUserRank}` : ''}
+                        </div>
+                        <div class="rating-list">
+                            ${top20.map((user, index) => `
+                                <div class="rating-item ${user.isCurrentUser ? 'current-user' : ''}">
+                                    <div class="rating-position">
+                                        ${getPositionEmoji(index + 1)} ${index + 1}
+                                    </div>
+                                    <div class="rating-name">${user.userName}</div>
+                                    <div class="rating-value">${user.displayValue}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            } else {
+                statsContent += `
+                    <div class="result-section">
+                        <div class="result-label">🏆 Глобальный рейтинг</div>
+                        <p style="text-align: center; color: #888; padding: 20px;">
+                            Пока нет активных пользователей
+                        </p>
+                    </div>
+                `;
+            }
+
+            statsContainer.innerHTML = statsContent;
+        }
+
+        function getWeeklyFilterTitle() {
+            switch (currentWeeklyFilter) {
+                case 'correct': return '🏆 Топ 10 недели по правильным ответам';
+                case 'completed': return '🏆 Топ 10 недели по завершённым тестам';
+                case 'time': return '🏆 Топ 10 недели по времени';
+                default: return '🏆 Топ 10 недели';
+            }
+        }
+
+        function getGlobalFilterTitle() {
+            switch (currentGlobalFilter) {
+                case 'correct': return '🌍 Топ 20 всех времён по правильным ответам';
+                case 'completed': return '🌍 Топ 20 всех времён по завершённым тестам';
+                case 'time': return '🌍 Топ 20 всех времён по общему времени';
+                case 'days': return '🌍 Топ 20 всех времён по активным дням';
+                default: return '🌍 Топ 20 всех времён';
+            }
+        }
+
+        function getPositionEmoji(position) {
+            switch (position) {
+                case 1: return '🥇';
+                case 2: return '🥈';
+                case 3: return '🥉';
+                case 4: return '4️⃣';
+                case 5: return '5️⃣';
+                case 6: return '6️⃣';
+                case 7: return '7️⃣';
+                case 8: return '8️⃣';
+                case 9: return '9️⃣';
+                case 10: return '🔟';
+                default: return '▪️';
+            }
         }
     </script>
 </body>
