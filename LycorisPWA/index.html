@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lycoris Tests</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- iOS PWA -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#922B3E">
+</head>
+<body>
+    <div id="app">
+        <!-- Экран авторизации -->
+        <div id="auth-screen" class="screen active">
+            <div class="container">
+                <h1>🎯 Lycoris</h1>
+                <p>Тесты и обучение</p>
+                
+                <div class="auth-form">
+                    <input type="email" id="email" placeholder="Email" class="input">
+                    <input type="password" id="password" placeholder="Пароль" class="input">
+                    <button onclick="login()" class="btn btn-primary">Войти</button>
+                    <button onclick="toggleMode()" class="btn btn-secondary">Регистрация</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Главный экран (скрыт сначала) -->
+        <div id="main-screen" class="screen">
+            <div class="container">
+                <h1>Главная</h1>
+                <div class="menu">
+                    <button onclick="showTests()" class="btn btn-primary">Пройти тест</button>
+                    <button onclick="showStats()" class="btn btn-primary">Статистика</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Экран списка тестов -->
+        <div id="tests-screen" class="screen">
+            <div class="container">
+                <h1>📚 Тесты</h1>
+                <div id="tests-list" class="tests-container">
+                    <!-- Тесты будут здесь -->
+                </div>
+                <button onclick="showScreen('main-screen')" class="btn btn-secondary">Назад</button>
+            </div>
+        </div>
+
+        <!-- Экран прохождения теста -->
+        <div id="test-session-screen" class="screen">
+            <div class="container">
+                <div id="question-container">
+                    <!-- Вопрос и варианты -->
+                </div>
+                <div class="test-controls">
+                    <button onclick="finishTest()" class="btn-small btn-danger">⏹️</button>
+                    <button onclick="previousQuestion()" class="btn-small btn-secondary">⬅️</button>
+                    <button onclick="checkAnswer()" class="btn-small btn-warning">✅</button>
+                    <button onclick="nextQuestion()" class="btn-small btn-primary">➡️</button>
+                </div>
+                <div id="test-progress"></div>
+                <div id="answer-feedback"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== БАЗОВАЯ НАВИГАЦИЯ =====
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+        }
+        
+        function login() {
+            showScreen('main-screen');
+        }
+        
+        function toggleMode() {
+            alert('Регистрация будет позже');
+        }
+        
+        function showTests() {
+            showScreen('tests-screen');
+            loadTestsList();
+        }
+        
+        function showStats() {
+            alert('Статистика будет позже');
+        }
+
+        // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ ТЕСТОВ =====
+        let currentTest = null;
+        let currentQuestionIndex = 0;
+        let userAnswers = [];
+        let testStartTime = null;
+        let checkedQuestions = new Set();
+
+        // ===== ЗАГРУЗКА СПИСКА ТЕСТОВ =====
+        async function loadTestsList() {
+            const testsContainer = document.getElementById('tests-list');
+            testsContainer.innerHTML = '<p>Загружаем тесты...</p>';
+
+            try {
+                const response = await fetch('https://tikaaaani.github.io/Lycoris-umbrella/tests/index.json');
+                const data = await response.json();
+                
+                displayTests(data.tests);
+            } catch (error) {
+                console.error('Ошибка загрузки списка тестов:', error);
+                testsContainer.innerHTML = `
+                    <div style="text-align: center; color: #ff4444;">
+                        <p>😔 Не удалось загрузить тесты</p>
+                        <p style="font-size: 14px; color: #888;">${error.message}</p>
+                        <button onclick="loadTestsList()" class="btn btn-primary" style="margin-top: 15px;">Попробовать снова</button>
+                    </div>
+                `;
+            }
+        }
+
+        // ===== ОТОБРАЖЕНИЕ СПИСКА ТЕСТОВ =====
+        function displayTests(tests) {
+            const testsContainer = document.getElementById('tests-list');
+            
+            if (tests.length === 0) {
+                testsContainer.innerHTML = '<p>Тесты не найдены</p>';
+                return;
+            }
+
+            testsContainer.innerHTML = tests.map(test => `
+                <div class="test-card" onclick="startTest('${test.id}')">
+                    <div class="test-header">
+                        <h3>${test.name}</h3>
+                        <span class="test-difficulty ${getDifficultyClass(test.difficulty)}">${test.difficulty}</span>
+                    </div>
+                    <p class="test-description">${test.description}</p>
+                    <div class="test-info">
+                        <span>📝 ${test.questionCount} вопросов</span>
+                        <span>⏱ ${test.estimatedTime}</span>
+                        <span class="file-type">${test.fileName.endsWith('.lyc') ? '🔒' : '📄'} ${test.fileName.split('.').pop()}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function getDifficultyClass(difficulty) {
+            const difficultyMap = {
+                'Легкий': 'difficulty-easy',
+                'Средний': 'difficulty-medium', 
+                'Сложный': 'difficulty-hard',
+                'Easy': 'difficulty-easy',
+                'Medium': 'difficulty-medium',
+                'Hard': 'difficulty-hard'
+            };
+            return difficultyMap[difficulty] || 'difficulty-medium';
+        }
+
+        // ===== ЗАПУСК ТЕСТА =====
+        async function startTest(testId) {
+            const testsContainer = document.getElementById('tests-list');
+            
+            try {
+                testsContainer.innerHTML = `
+                    <div style="text-align: center;">
+                        <div class="loading-spinner"></div>
+                        <p>Загружаем тест...</p>
+                    </div>
+                `;
+
+                const testData = await loadRealTestData(testId);
+                
+                if (!testData || !testData.questions || testData.questions.length === 0) {
+                    throw new Error('Тест пустой или поврежден');
+                }
+
+                currentTest = testData;
+                currentQuestionIndex = 0;
+                userAnswers = [];
+                checkedQuestions = new Set();
+                testStartTime = Date.now();
+                
+                showScreen('test-session-screen');
+                displayCurrentQuestion();
+                
+            } catch (error) {
+                console.error('Ошибка запуска теста:', error);
+                testsContainer.innerHTML = `
+                    <div class="error-message">
+                        <p>❌ Не удалось загрузить тест</p>
+                        <p style="font-size: 14px; margin-top: 8px;">${error.message}</p>
+                        <button onclick="loadTestsList()" class="btn btn-primary" style="margin-top: 15px;">
+                            Вернуться к списку
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // ===== РЕАЛЬНАЯ ЗАГРУЗКА ТЕСТОВ =====
+        async function loadRealTestData(testId) {
+            try {
+                console.log('Загружаем тест ID:', testId);
+                
+                const testsResponse = await fetch('https://tikaaaani.github.io/Lycoris-umbrella/tests/index.json');
+                const testsData = await testsResponse.json();
+                
+                const testInfo = testsData.tests.find(test => test.id === testId);
+                if (!testInfo) {
+                    throw new Error('Тест не найден в index.json');
+                }
+
+                console.log('Найден тест:', testInfo);
+
+                let testContent;
+                
+                try {
+                    console.log('Пробуем загрузить JSON:', testInfo.fileName);
+                    const jsonResponse = await fetch(`https://tikaaaani.github.io/Lycoris-umbrella/tests/${testInfo.fileName}`);
+                    
+                    if (!jsonResponse.ok) {
+                        throw new Error(`HTTP error! status: ${jsonResponse.status}`);
+                    }
+                    
+                    testContent = await jsonResponse.text();
+                    console.log('JSON загружен успешно');
+                    
+                } catch (jsonError) {
+                    console.log('JSON не доступен, пробуем LYC...', jsonError);
+                    
+                    const lycFileName = testInfo.fileName.replace('.json', '.lyc');
+                    const lycResponse = await fetch(`https://tikaaaani.github.io/Lycoris-umbrella/tests/${lycFileName}`);
+                    
+                    if (!lycResponse.ok) {
+                        throw new Error(`LYC файл тоже не доступен: ${lycResponse.status}`);
+                    }
+                    
+                    const encryptedData = await lycResponse.arrayBuffer();
+                    testContent = await decryptTestContent(new Uint8Array(encryptedData));
+                    console.log('LYC файл расшифрован');
+                }
+
+                const testData = JSON.parse(testContent);
+                console.log('Тест распарсен, вопросов:', testData.questions.length);
+                
+                return {
+                    id: testId,
+                    title: testInfo.name,
+                    questions: testData.questions
+                };
+                
+            } catch (error) {
+                console.error('Полная ошибка загрузки теста:', error);
+                throw new Error('Не удалось загрузить тест: ' + error.message);
+            }
+        }
+
+        // ===== ДЕШИФРОВАНИЕ .lyc ФАЙЛОВ =====
+        async function decryptTestContent(encryptedContent) {
+            try {
+                try {
+                    const text = new TextDecoder().decode(encryptedContent);
+                    const decoded = atob(text);
+                    console.log('Прямое Base64 декодирование успешно');
+                    return decoded;
+                } catch (simpleError) {
+                    console.log('Прямое декодирование не сработало, пробуем AES...');
+                    
+                    const key = "YouWillFindYourLoveDear";
+                    const keyBytes = normalizeKey(key);
+                    
+                    const cryptoKey = await crypto.subtle.importKey(
+                        'raw',
+                        keyBytes,
+                        { name: 'AES-CBC' },
+                        false,
+                        ['decrypt']
+                    );
+
+                    const text = new TextDecoder().decode(encryptedContent);
+                    const decodedBytes = Uint8Array.from(atob(text), c => c.charCodeAt(0));
+                    
+                    const iv = decodedBytes.slice(0, 16);
+                    const data = decodedBytes.slice(16);
+                    
+                    const decrypted = await crypto.subtle.decrypt(
+                        {
+                            name: 'AES-CBC',
+                            iv: iv
+                        },
+                        cryptoKey,
+                        data
+                    );
+                    
+                    return new TextDecoder().decode(decrypted);
+                }
+                
+            } catch (error) {
+                console.error('Ошибка дешифрования:', error);
+                throw new Error('Ошибка дешифрования теста: ' + error.message);
+            }
+        }
+
+        function normalizeKey(key) {
+            const keyBytes = new TextEncoder().encode(key);
+            const requiredLength = 16;
+            
+            if (keyBytes.length === requiredLength) {
+                return keyBytes;
+            }
+            
+            const normalizedKey = new Uint8Array(requiredLength);
+            normalizedKey.set(keyBytes.slice(0, Math.min(keyBytes.length, requiredLength)));
+            return normalizedKey;
+        }
+
+        // ===== ОТОБРАЖЕНИЕ ВОПРОСА С ЦВЕТОВОЙ ПОДСВЕТКОЙ =====
+        function displayCurrentQuestion() {
+            const questionContainer = document.getElementById('question-container');
+            const progressContainer = document.getElementById('test-progress');
+            
+            if (!currentTest || !currentTest.questions[currentQuestionIndex]) {
+                finishTest();
+                return;
+            }
+
+            const question = currentTest.questions[currentQuestionIndex];
+            const progress = ((currentQuestionIndex + 1) / currentTest.questions.length * 100).toFixed(0);
+            const isChecked = checkedQuestions.has(currentQuestionIndex);
+            const userAnswer = userAnswers[currentQuestionIndex];
+            
+            // Прогресс бар
+            progressContainer.innerHTML = `
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${progress}%"></div>
+                </div>
+                <div class="progress-text">${currentQuestionIndex + 1} / ${currentTest.questions.length}</div>
+            `;
+
+            // Вопрос и варианты ответов с цветовой подсветкой
+            questionContainer.innerHTML = `
+                <div class="question-card">
+                    <h2>${question.question}</h2>
+                    <div class="answers-list">
+                        ${question.answers.map((answer, index) => {
+                            let answerClass = "answer-option";
+                            let statusIcon = "";
+                            
+                            if (isChecked) {
+                                // ПОСЛЕ ПРОВЕРКИ - цветовая подсветка
+                                if (answer.isCorrect) {
+                                    answerClass += " answer-correct";
+                                    statusIcon = '<span class="answer-status">✅</span>';
+                                } else if (userAnswer === index && !answer.isCorrect) {
+                                    answerClass += " answer-incorrect";
+                                    statusIcon = '<span class="answer-status">❌</span>';
+                                } else {
+                                    answerClass += " answer-neutral";
+                                }
+                            } else {
+                                // ДО ПРОВЕРКИ - обычное выделение
+                                if (userAnswer === index) {
+                                    answerClass += " selected";
+                                }
+                            }
+                            
+                            return `
+                                <div class="${answerClass}" onclick="selectAnswer(${index})">
+                                    <span class="answer-letter">${String.fromCharCode(65 + index)}</span>
+                                    <span class="answer-text">${answer.text}</span>
+                                    ${statusIcon}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // ===== ВЫБОР ОТВЕТА =====
+        function selectAnswer(answerIndex) {
+            if (checkedQuestions.has(currentQuestionIndex)) {
+                return;
+            }
+            
+            userAnswers[currentQuestionIndex] = answerIndex;
+            displayCurrentQuestion();
+            document.getElementById('answer-feedback').innerHTML = '';
+        }
+
+        // ===== ПРОВЕРКА ОТВЕТА ТОЛЬКО С ЦВЕТОВОЙ ПОДСВЕТКОЙ =====
+function checkAnswer() {
+    const currentAnswer = userAnswers[currentQuestionIndex];
+    
+    if (currentAnswer === undefined) {
+        return; // Просто ничего не делаем, если ответ не выбран
+    }
+    
+    // Помечаем вопрос как проверенный
+    checkedQuestions.add(currentQuestionIndex);
+    
+    // Перерисовываем вопрос с цветовой подсветкой
+    displayCurrentQuestion();
+}
+
+        // ===== НАВИГАЦИЯ ПО ВОПРОСАМ =====
+        function nextQuestion() {
+            document.getElementById('answer-feedback').innerHTML = '';
+            
+            if (currentQuestionIndex < currentTest.questions.length - 1) {
+                currentQuestionIndex++;
+                displayCurrentQuestion();
+            } else {
+                finishTest();
+            }
+        }
+
+        function previousQuestion() {
+            document.getElementById('answer-feedback').innerHTML = '';
+            
+            if (currentQuestionIndex > 0) {
+                currentQuestionIndex--;
+                displayCurrentQuestion();
+            }
+        }
+
+        // ===== ЗАВЕРШЕНИЕ ТЕСТА =====
+        function finishTest() {
+            const timeSpent = Math.round((Date.now() - testStartTime) / 1000);
+            const correctAnswers = calculateCorrectAnswers();
+            const totalQuestions = currentTest.questions.length;
+            const percentage = Math.round((correctAnswers / totalQuestions) * 100);
+            
+            const questionContainer = document.getElementById('question-container');
+            questionContainer.innerHTML = `
+                <div class="result-card">
+                    <h2>🎉 Тест завершен!</h2>
+                    <div class="result-stats">
+                        <div class="stat">
+                            <span class="stat-value">${correctAnswers}/${totalQuestions}</span>
+                            <span class="stat-label">Правильных ответов</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">${percentage}%</span>
+                            <span class="stat-label">Результат</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">${Math.round(timeSpent / 60)} мин</span>
+                            <span class="stat-label">Время</span>
+                        </div>
+                    </div>
+                    <button onclick="showScreen('tests-screen')" class="btn btn-primary">К списку тестов</button>
+                    <button onclick="showScreen('main-screen')" class="btn btn-secondary">На главную</button>
+                </div>
+            `;
+            
+            document.getElementById('test-progress').innerHTML = '';
+            document.querySelector('.test-controls').style.display = 'none';
+        }
+
+        function calculateCorrectAnswers() {
+            let correct = 0;
+            currentTest.questions.forEach((question, index) => {
+                const userAnswer = userAnswers[index];
+                if (userAnswer !== undefined && question.answers[userAnswer].isCorrect) {
+                    correct++;
+                }
+            });
+            return correct;
+        }
+    </script>
+</body>
+</html>
