@@ -60,6 +60,17 @@
             </div>
         </div>
 
+        <!-- Экран статистики -->
+<div id="stats-screen" class="screen">
+    <div class="container">
+        <h1>📊 Статистика</h1>
+        <div id="stats-content" class="tests-container">
+            <!-- Статистика будет здесь -->
+        </div>
+        <button onclick="showScreen('main-screen')" class="btn btn-secondary">Назад</button>
+    </div>
+</div>
+
         <!-- Экран прохождения теста -->
         <div id="test-session-screen" class="screen">
             <div class="container">
@@ -203,11 +214,98 @@
         }
         
         function showStats() {
-            const user = auth.currentUser;
-            if (user) {
-                alert(`Статистика для: ${user.email}\n\nФункция статистики в разработке`);
-            }
-        }
+    const user = auth.currentUser;
+    if (!user) return;
+
+    showScreen('stats-screen');
+    loadUserStats();
+}
+
+async function loadUserStats() {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+        const database = firebase.database();
+        const statsRef = database.ref('users').child(user.uid).child('stats');
+        
+        statsRef.once('value').then((snapshot) => {
+            const stats = snapshot.val();
+            displayStats(stats);
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки статистики:', error);
+    }
+}
+
+function displayStats(stats) {
+    const statsContainer = document.getElementById('stats-content');
+    
+    if (!stats) {
+        statsContainer.innerHTML = '<p>Статистика пока недоступна</p>';
+        return;
+    }
+
+    const avgPercentage = stats.totalTests > 0 ? Math.round((stats.totalCorrect / (stats.totalCorrect + stats.totalWrong)) * 100) : 0;
+    const avgTimePerTest = stats.completedTests > 0 ? Math.round(stats.totalTimeSeconds / stats.completedTests) : 0;
+
+    statsContainer.innerHTML = `
+        <div class="stats-overview">
+            <div class="stat-card">
+                <div class="stat-number">${stats.completedTests || 0}</div>
+                <div class="stat-title">Пройдено тестов</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${stats.activeDays || 0}</div>
+                <div class="stat-title">Активных дней</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${avgPercentage}%</div>
+                <div class="stat-title">Средний результат</div>
+            </div>
+        </div>
+        
+        <div class="result-section">
+            <div class="result-label">📊 Общая статистика</div>
+            <div class="stats-details">
+                <div class="stat-detail">
+                    <span>✅ Правильных ответов:</span>
+                    <span class="stat-detail-value">${stats.totalCorrect || 0}</span>
+                </div>
+                <div class="stat-detail">
+                    <span>❌ Неправильных ответов:</span>
+                    <span class="stat-detail-value">${stats.totalWrong || 0}</span>
+                </div>
+                <div class="stat-detail">
+                    <span>⏱️ Общее время:</span>
+                    <span class="stat-detail-value">${stats.totalTimeFormatted || '00:00:00'}</span>
+                </div>
+                <div class="stat-detail">
+                    <span>📅 Среднее время на тест:</span>
+                    <span class="stat-detail-value">${formatTimeShort(avgTimePerTest)}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="result-section">
+            <div class="result-label">🌅 Активность по времени суток</div>
+            <div class="activity-stats">
+                <div class="activity-item">
+                    <span>🌅 Утро (6-12):</span>
+                    <span class="activity-value">${stats.activityMorning || 0} тестов</span>
+                </div>
+                <div class="activity-item">
+                    <span>☀️ День (13-18):</span>
+                    <span class="activity-value">${stats.activityDay || 0} тестов</span>
+                </div>
+                <div class="activity-item">
+                    <span>🌙 Вечер (19+):</span>
+                    <span class="activity-value">${stats.activityEvening || 0} тестов</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
 
         // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ ТЕСТОВ =====
         let currentTest = null;
@@ -215,6 +313,129 @@
         let userAnswers = [];
         let testStartTime = null;
         let checkedQuestions = new Set();
+
+        // ===== СТАТИСТИКА И FIREBASE =====
+function saveTestResults(correctAnswers, totalQuestions, timeSpentSeconds) {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const database = firebase.database();
+    const userRef = database.ref('users').child(user.uid);
+    const timestamp = Date.now();
+    
+    // Очистка названия теста от недопустимых символов
+    const safeTestTitle = currentTest.title.replace(/[.#$\[\]]/g, '_');
+    const percentage = Math.round((correctAnswers / totalQuestions) * 100);
+
+    // Определение времени суток для статистики
+    const hour = new Date().getHours();
+    const activityField = hour >= 6 && hour <= 12 ? "activityMorning" : 
+                         hour >= 13 && hour <= 18 ? "activityDay" : "activityEvening";
+
+    // Сохранение истории теста
+    const testHistoryData = {
+        score: correctAnswers,
+        testDurationSeconds: timeSpentSeconds,
+        timestamp: timestamp,
+        totalQuestions: totalQuestions,
+        percentage: percentage,
+        testTitle: currentTest.title
+    };
+
+    userRef.child('testHistory').child(safeTestTitle).child(timestamp).set(testHistoryData);
+
+    // Сохраняем email пользователя
+    userRef.child('email').set(user.email);
+
+    // Обновление общей статистики
+    userRef.child('stats').once('value').then((snapshot) => {
+        const currentStats = snapshot.val() || {
+            completedTests: 0,
+            totalCorrect: 0,
+            totalWrong: 0,
+            totalTests: 0,
+            totalTimeSeconds: 0,
+            activeDays: 0,
+            activityMorning: 0,
+            activityDay: 0,
+            activityEvening: 0,
+            lastCorrect: 0,
+            lastWrong: 0,
+            lastPercent: 0,
+            lastTime: 0
+        };
+
+        // Проверяем, был ли сегодня тест
+        const today = new Date().toDateString();
+        userRef.child('lastActivityDate').once('value').then((lastDateSnapshot) => {
+            const lastActivityDate = lastDateSnapshot.val();
+            let newActiveDays = currentStats.activeDays;
+            
+            if (lastActivityDate !== today) {
+                newActiveDays++;
+                userRef.child('lastActivityDate').set(today);
+            }
+
+            const updatedStats = {
+                completedTests: currentStats.completedTests + 1,
+                totalCorrect: currentStats.totalCorrect + correctAnswers,
+                totalWrong: currentStats.totalWrong + (totalQuestions - correctAnswers),
+                totalTests: currentStats.totalTests + 1,
+                totalTimeSeconds: (currentStats.totalTimeSeconds || 0) + timeSpentSeconds,
+                totalTimeFormatted: formatTime((currentStats.totalTimeSeconds || 0) + timeSpentSeconds),
+                activeDays: newActiveDays,
+                activityMorning: activityField === "activityMorning" ? currentStats.activityMorning + 1 : currentStats.activityMorning,
+                activityDay: activityField === "activityDay" ? currentStats.activityDay + 1 : currentStats.activityDay,
+                activityEvening: activityField === "activityEvening" ? currentStats.activityEvening + 1 : currentStats.activityEvening,
+                lastCorrect: correctAnswers,
+                lastWrong: totalQuestions - correctAnswers,
+                lastPercent: percentage,
+                lastTime: timeSpentSeconds,
+                timestamp: timestamp
+            };
+
+            userRef.child('stats').set(updatedStats);
+        });
+    });
+
+    // Обновление недельной статистики
+    const weekStart = getWeekStartTimestamp();
+    userRef.child('weeklyStats').once('value').then((weeklySnapshot) => {
+        const currentWeekly = weeklySnapshot.val() || {
+            weekStart: weekStart,
+            correctAnswers: 0,
+            wrongAnswers: 0,
+            completedTests: 0,
+            totalTime: 0
+        };
+
+        const updatedWeekly = {
+            weekStart: weekStart,
+            correctAnswers: currentWeekly.correctAnswers + correctAnswers,
+            wrongAnswers: currentWeekly.wrongAnswers + (totalQuestions - correctAnswers),
+            completedTests: currentWeekly.completedTests + 1,
+            totalTime: currentWeekly.totalTime + timeSpentSeconds
+        };
+
+        userRef.child('weeklyStats').set(updatedWeekly);
+    });
+}
+
+function getWeekStartTimestamp() {
+    const now = new Date();
+    const day = now.getDay();
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Понедельник как начало недели
+    const weekStart = new Date(now.setDate(diff));
+    weekStart.setHours(0, 0, 0, 0);
+    return weekStart.getTime();
+}
+
+function formatTime(totalSeconds) {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
 
         // ===== ЗАГРУЗКА СПИСКА ТЕСТОВ =====
         async function loadTestsList() {
@@ -549,38 +770,118 @@
         }
 
         // ===== ЗАВЕРШЕНИЕ ТЕСТА =====
-        function finishTest() {
-            const timeSpent = Math.round((Date.now() - testStartTime) / 1000);
-            const correctAnswers = calculateCorrectAnswers();
-            const totalQuestions = currentTest.questions.length;
-            const percentage = Math.round((correctAnswers / totalQuestions) * 100);
+        // ===== ЗАВЕРШЕНИЕ ТЕСТА С КРАСИВЫМ РЕЗУЛЬТАТОМ =====
+function finishTest() {
+    const timeSpentSeconds = Math.round((Date.now() - testStartTime) / 1000);
+    const correctAnswers = calculateCorrectAnswers();
+    const totalQuestions = currentTest.questions.length;
+    const percentage = Math.round((correctAnswers / totalQuestions) * 100);
+    const incorrectAnswers = totalQuestions - correctAnswers;
+    
+    // Сохраняем результаты в Firebase
+    saveTestResults(correctAnswers, totalQuestions, timeSpentSeconds);
+    
+    // Определение фразы по проценту
+    const { phrase, emoji, color } = getResultPhrase(percentage);
+    
+    const questionContainer = document.getElementById('question-container');
+    questionContainer.innerHTML = `
+        <div class="result-card">
+            <h2>🎉 Тест завершен!</h2>
             
-            const questionContainer = document.getElementById('question-container');
-            questionContainer.innerHTML = `
-                <div class="result-card">
-                    <h2>🎉 Тест завершен!</h2>
-                    <div class="result-stats">
-                        <div class="stat">
-                            <span class="stat-value">${correctAnswers}/${totalQuestions}</span>
-                            <span class="stat-label">Правильных ответов</span>
-                        </div>
-                        <div class="stat">
-                            <span class="stat-value">${percentage}%</span>
-                            <span class="stat-label">Результат</span>
-                        </div>
-                        <div class="stat">
-                            <span class="stat-value">${Math.round(timeSpent / 60)} мин</span>
-                            <span class="stat-label">Время</span>
-                        </div>
+            <!-- Время -->
+            <div class="result-section">
+                <div class="result-label">⏱️ Затраченное время</div>
+                <div class="result-value-large">${formatTimeShort(timeSpentSeconds)}</div>
+            </div>
+            
+            <!-- Статистика ответов -->
+            <div class="result-section">
+                <div class="result-label">📊 Статистика ответов</div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-emoji">✅</div>
+                        <div class="stat-value" style="color: #00C853;">${correctAnswers}</div>
+                        <div class="stat-label">Правильные</div>
                     </div>
-                    <button onclick="showScreen('tests-screen')" class="btn btn-primary">К списку тестов</button>
-                    <button onclick="showScreen('main-screen')" class="btn btn-secondary">На главную</button>
+                    <div class="stat-item">
+                        <div class="stat-emoji">❌</div>
+                        <div class="stat-value" style="color: #D50000;">${incorrectAnswers}</div>
+                        <div class="stat-label">Неправильные</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-emoji">📝</div>
+                        <div class="stat-value" style="color: #757575;">${totalQuestions}</div>
+                        <div class="stat-label">Всего</div>
+                    </div>
                 </div>
-            `;
+            </div>
             
-            document.getElementById('test-progress').innerHTML = '';
-            document.querySelector('.test-controls').style.display = 'none';
-        }
+            <!-- Процент правильных ответов -->
+            <div class="result-section">
+                <div class="result-label">📈 Процент правильных ответов</div>
+                <div class="result-value-large" style="color: ${color};">${percentage}%</div>
+                <div class="progress-bar" style="margin: 15px 0;">
+                    <div class="progress-fill" style="width: ${percentage}%; background: ${color};"></div>
+                </div>
+            </div>
+            
+            <!-- Фраза с эмодзи -->
+            <div class="phrase-card" style="background: ${color}20; border-color: ${color};">
+                <div class="phrase-text">${phrase}</div>
+                <div class="phrase-emoji">${emoji}</div>
+            </div>
+            
+            <div class="result-buttons">
+                <button onclick="showScreen('tests-screen')" class="btn btn-primary">К списку тестов</button>
+                <button onclick="showScreen('main-screen')" class="btn btn-secondary">На главную</button>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('test-progress').innerHTML = '';
+    document.querySelector('.test-controls').style.display = 'none';
+}
+
+function getResultPhrase(percentage) {
+    if (percentage >= 90) {
+        return { 
+            phrase: "Секс-кабинет в трахе от таких как ты!", 
+            emoji: "😘🦈🐦‍🔥", 
+            color: "#00C853" 
+        };
+    } else if (percentage >= 76) {
+        return { 
+            phrase: "Твердая четвёрочка, надо поднатужитца!", 
+            emoji: "❤️🥺", 
+            color: "#64DD17" 
+        };
+    } else if (percentage >= 66) {
+        return { 
+            phrase: "Уже уровень везения", 
+            emoji: "🤞", 
+            color: "#FFD600" 
+        };
+    } else if (percentage >= 61) {
+        return { 
+            phrase: "На тоненького! Иди повторяй", 
+            emoji: "✌️😶‍🌫️", 
+            color: "#FF9800" 
+        };
+    } else {
+        return { 
+            phrase: "Позорище иди учи", 
+            emoji: "🤢🤮", 
+            color: "#D50000" 
+        };
+    }
+}
+
+function formatTimeShort(totalSeconds) {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
 
         function calculateCorrectAnswers() {
             let correct = 0;
