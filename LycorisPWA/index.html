@@ -162,7 +162,7 @@
         // ===== ЗАПУСК ТЕСТА =====
         async function startTest(testId) {
             const testsContainer = document.getElementById('tests-list');
-            
+    
             try {
                 testsContainer.innerHTML = `
                     <div style="text-align: center;">
@@ -171,34 +171,40 @@
                     </div>
                 `;
 
-                const testData = await loadRealTestData(testId);
-                
-                if (!testData || !testData.questions || testData.questions.length === 0) {
-                    throw new Error('Тест пустой или поврежден');
-                }
-
-                currentTest = testData;
-                currentQuestionIndex = 0;
-                userAnswers = [];
-                checkedQuestions = new Set();
-                testStartTime = Date.now();
-                
-                showScreen('test-session-screen');
-                displayCurrentQuestion();
-                
-            } catch (error) {
-                console.error('Ошибка запуска теста:', error);
-                testsContainer.innerHTML = `
-                    <div class="error-message">
-                        <p>❌ Не удалось загрузить тест</p>
-                        <p style="font-size: 14px; margin-top: 8px;">${error.message}</p>
-                        <button onclick="loadTestsList()" class="btn btn-primary" style="margin-top: 15px;">
-                            Вернуться к списку
-                        </button>
-                    </div>
-                `;
+            // ВОССТАНАВЛИВАЕМ ВИДИМОСТЬ КНОПОК УПРАВЛЕНИЯ
+            const testControls = document.querySelector('.test-controls');
+            if   (testControls) {
+                testControls.style.display = 'flex';
             }
+
+            const testData = await loadRealTestData(testId);
+        
+            if (!testData || !testData.questions || testData.questions.length === 0) {
+                throw new Error('Тест пустой или поврежден');
+            }
+
+            currentTest = testData;
+            currentQuestionIndex = 0;
+            userAnswers = [];
+            checkedQuestions = new Set();
+            testStartTime = Date.now();
+        
+            showScreen('test-session-screen');
+            displayCurrentQuestion();
+        
+        } catch (error) {
+            console.error('Ошибка запуска теста:', error);
+            testsContainer.innerHTML = `
+                <div class="error-message">
+                    <p>❌ Не удалось загрузить тест</p>
+                    <p style="font-size: 14px; margin-top: 8px;">${error.message}</p>
+                    <button onclick="loadTestsList()" class="btn btn-primary" style="margin-top: 15px;">
+                        Вернуться к списку
+                    </button>
+                </div>
+            `;
         }
+    }
 
         // ===== РЕАЛЬНАЯ ЗАГРУЗКА ТЕСТОВ =====
         async function loadRealTestData(testId) {
@@ -369,7 +375,6 @@
                             
                             return `
                                 <div class="${answerClass}" onclick="selectAnswer(${index})">
-                                    <span class="answer-letter">${String.fromCharCode(65 + index)}</span>
                                     <span class="answer-text">${answer.text}</span>
                                     ${statusIcon}
                                 </div>
