@@ -2,7 +2,7 @@
   "name": "Lycoris Tests",
   "short_name": "Lycoris", 
   "description": "Тесты и обучение",
-  "start_url": "/Lycoris-umbrella/",
+  "start_url": "/Lycoris-umbrella/LycorisPWA/",
   "display": "standalone",
   "background_color": "#121212",
   "theme_color": "#922B3E",
